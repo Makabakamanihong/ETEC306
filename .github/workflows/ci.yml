@@ -1,0 +1,19 @@
+name: docs-check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Required files exist
+        run: |
+          test -f README.md
+          test -f docs/technical-design.md
+          test -f docs/project-plan.md
+          test -f docs/collaboration.md
+          test -f src/README.md

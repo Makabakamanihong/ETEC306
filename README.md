@@ -1,6 +1,5 @@
 # ETEC306 — Edge–Cloud Collaborative Intelligent Security & Dynamic Target Tracking
 
-**边缘–云协同智能安防与动态目标跟踪系统**
 
 | Item | Detail |
 | --- | --- |
@@ -23,7 +22,7 @@ This repository tracks a headless Raspberry Pi edge node that uses millimeter-wa
 
 ## Repository layout
 
-```text
+```
 docs/technical-design.md   Full hardware/software technical draft
 docs/project-plan.md       Phased checklist for the capstone
 docs/collaboration.md      Git / Issues / Project board workflow

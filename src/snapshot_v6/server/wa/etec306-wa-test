@@ -1,0 +1,5 @@
+#!/bin/bash
+# send ONE test message to the configured recipients via the running service
+printf '{"text": %s}\n' "$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "${1:-ETEC306 test: WhatsApp alerts are working}")" | sudo tee /opt/etec306-wa/state/test_request.json >/dev/null
+sudo chown etecwa:etecwa /opt/etec306-wa/state/test_request.json
+sleep 6; sudo journalctl -u etec306-wa --no-pager -n 5 | grep -E "TEST|fail" | cut -c1-200

@@ -1,0 +1,13 @@
+{
+  "name": "etec306-wa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ETEC306 alarm -> WhatsApp forwarder (self-hosted, linked device via Baileys)",
+  "main": "bot.js",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.22",
+    "mqtt": "^5.10.0",
+    "pino": "^9.0.0",
+    "qrcode": "^1.5.4"
+  }
+}

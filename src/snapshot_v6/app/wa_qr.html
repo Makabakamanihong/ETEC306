@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ETEC306 WhatsApp 配对</title>
+<script src="/i18n.js"></script>
+<script src="/common.js"></script>
+<style>body{font-family:"SimSun",serif;background:#e8e8e8;margin:8px} #qr{width:340px;max-width:95vw;background:white;border:1px solid #888} .ok{color:green} .bad{color:#c00}</style>
+</head><body>
+<b>ETEC306 WhatsApp（自建）配对</b> &nbsp; <a href="/">返回监控</a><br><br>
+用副号手机：WhatsApp → 已关联设备 → 关联新设备 → 扫下面的二维码（每 3 秒自动刷新，二维码约 20 秒换一次）。<br><br>
+<div id="st">查询中…</div><br>
+<img id="qr" alt="QR">
+<script>
+function tick() {
+  fetch("/api/wa_status?" + Date.now()).then(function (r) { return r.json(); }).then(function (j) {
+    var st = j.status || {}, txt;
+    if (st.linked) txt = "<b class=ok>已配对并连接</b>" + (st.me ? " (" + esc(st.me) + ")" : "");
+    else if (st.error) txt = "<b class=bad>" + esc(st.error) + "</b>";
+    else if (j.has_qr) txt = "等待扫码… 二维码生成于 " + esc(j.qr_t || "?");
+    else txt = "<b class=bad>没有二维码（机器人离线或 MQTT 未连接）</b>";
+    $("st").innerHTML = txt + " <small>（状态更新 " + esc(st.t || "-") + "）</small>";
+    $("qr").style.display = (j.has_qr && !st.linked) ? "block" : "none";
+    if (j.has_qr && !st.linked && $("qr").dataset.t !== j.qr_t) { $("qr").dataset.t = j.qr_t; $("qr").src = "/api/wa_qr.png?" + Date.now(); }
+  }).catch(function () { $("st").innerHTML = "<b class=bad>连接中断</b>"; });
+}
+tick(); setInterval(tick, 3000);
+</script>
+</body></html>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<title>ETEC306 设置</title>
+<style>
+body { font-family: "SimSun", serif; font-size: 14px; margin: 6px; background: #eee; }
+td, th { font-size: 13px; padding: 2px 5px; }
+th { background: #ddd; }
+.wrap { position: relative; display: inline-block; }
+#ov { position: absolute; left: 0; top: 0; }
+.grp { background: #bcd; font-weight: bold; }
+</style>
+<script src="/i18n.js"></script>
+<script src="/common.js"></script>
+</head>
+<body>
+<table width="100%"><tr><td><b>ETEC306 设置</b> &nbsp; <span id="clock"></span></td>
+<td align="right"><input type="button" value="返回监控" onclick="location.href='/'"> <input type="button" value="人脸录入" onclick="location.href='/enroll.html'"></td></tr></table>
+<hr>
+<p>跳到：<a href="#calib">标定</a> | <a href="#params">调参</a> | <a href="#servo">舵机测试</a> | <a href="#radar">雷达/航迹</a> | <a href="#notify">手机通知</a> | <a href="#sys">系统</a></p>
+
+<a name="calib"></a>
+<fieldset><legend><b>1. 标定（雷达 → 云台/摄像头）</b></legend>
+<table border="0"><tr valign="top"><td>
+<div class="wrap"><img id="cam" src="/api/stream.mjpg" width="480" height="270"><canvas id="ov" width="480" height="270"></canvas></div>
+</td><td>
+<b>第一步：方向自检</b>（自动，不用人）<br>
+云台会向右、向上各转 8°，看画面往哪边移动，自动改 pan_sign / tilt_sign，并估计摄像头视场角。<br>
+<input type="button" value="方向自检" onclick="calib({action:'selftest'})"><br><br>
+<b>第二步：取点</b>（需要一个人）<br>
+云台固定在 pan <input id="cp" size="3" value="0">° tilt <input id="ct" size="3" value="0">°
+<input type="button" value="开始标定" onclick="calib({action:'start', pan:$('cp').value, tilt:$('ct').value})"><br>
+站到画面里，<b>在脸旁边挥手</b>（或正对镜头让它检测到脸），左边画面出现<font color="red">红框“候选”</font>，确认是你，再点：<br>
+<input type="button" value="记录这一点" onclick="calib({action:'record'})">
+<input type="button" value="撤销上一点" onclick="calib({action:'undo'})">
+<input type="button" value="清空" onclick="calib({action:'clear'})"><br>
+换位置（左/中/右、近/远）重复 3-6 次，然后：<br>
+<input type="button" value="拟合并保存" onclick="calib({action:'fit', apply:true})">
+<input type="button" value="只计算不保存" onclick="calib({action:'fit', apply:false})">
+<input type="button" value="退出标定" onclick="calib({action:'stop'})"><br><br>
+状态：<span id="cmode">-</span><br>
+<span id="cmsg" style="color:blue"></span><br>
+候选：<span id="ccand">-</span>
+</td></tr></table>
+<table border="1" cellspacing="0" id="csamples"></table>
+</fieldset>
+
+<a name="params"></a>
+<fieldset><legend><b>2. 调参</b>（改完点“保存”，立即生效）</legend>
+<input type="button" value="保存" onclick="saveSettings()"> <input type="button" value="撤销未保存" onclick="loadSettings()">
+<input type="button" value="恢复默认" onclick="resetSettings()"> <span id="setres"></span>
+<table border="1" cellspacing="0" id="settings"></table>
+<input type="button" value="保存" onclick="saveSettings()">
+</fieldset>
+
+<a name="servo"></a>
+<fieldset><legend><b>3. 舵机手动测试</b>（T2；进入后暂停跟踪）</legend>
+CH4 水平：<input type="button" value="-10" onclick="servo(4,-10)"><input type="button" value="-1" onclick="servo(4,-1)"><input type="button" value="+1" onclick="servo(4,1)"><input type="button" value="+10" onclick="servo(4,10)"><input type="button" value="1500" onclick="servoC(4)"><br>
+CH8 俯仰：<input type="button" value="-10" onclick="servo(8,-10)"><input type="button" value="-1" onclick="servo(8,-1)"><input type="button" value="+1" onclick="servo(8,1)"><input type="button" value="+10" onclick="servo(8,10)"><input type="button" value="1500" onclick="servoC(8)"><br>
+<input type="button" value="退出手动并恢复跟踪" onclick="servoExit()"> 1 计数 ≈ 4.88 µs ≈ 0.44°。当前：<span id="man">-</span><br>
+其他：<input type="button" value="暂停跟踪" onclick="cmd('pause')"> <input type="button" value="恢复跟踪" onclick="cmd('resume')">
+<input type="button" value="立即比对身份" onclick="cmd('identify')"> <input type="button" value="清空比对/非人记录" onclick="cmd('reset_identity')"> <span id="cmdres"></span>
+</fieldset>
+
+<a name="radar"></a>
+<fieldset><legend><b>4. 雷达 / 航迹 / 指向</b></legend>
+<table border="0"><tr valign="top"><td>
+<canvas id="plot" width="420" height="250" style="border:1px solid #000;background:white"></canvas><br>
+范围 <select id="zoom"><option value="6000">6 m</option><option value="3000" selected>3 m</option><option value="1500">1.5 m</option></select>
+<small>灰点=原始点 方框=被判为物体的位置</small>
+</td><td>
+<table border="1" cellspacing="0" id="guide"></table>
+</td></tr></table>
+雷达原始点：<table border="1" cellspacing="0"><tr><th>槽</th><th>X(右正)</th><th>Y</th><th>速度cm/s</th><th>距离</th><th>方位°</th><th>有效</th></tr><tbody id="tgt"></tbody></table>
+航迹：<table border="1" cellspacing="0"><tr><th>ID</th><th>X</th><th>Y</th><th>r m</th><th>vx</th><th>vy</th><th>类别</th><th>命中</th><th>确认</th><th>存在s</th></tr><tbody id="trk"></tbody></table>
+<small id="raw"></small>
+</fieldset>
+
+<a name="power"></a>
+<fieldset><legend><b>系统 / 功耗（估算）</b></legend>
+<input type="button" value="唤醒摄像头" onclick="post('/api/cmd',{action:'wake_camera'})"> <input type="button" value="摄像头休眠" onclick="post('/api/cmd',{action:'sleep_camera'})">
+<input type="button" value="进入 Wi-Fi 配网模式" onclick="if(confirm('进入配网模式？树莓派会断开当前 Wi-Fi，开热点 ETEC306-Setup（密码在 OLED 上），10 分钟内没配置会自动恢复原网络。'))post('/api/cmd',{action:'wifi_setup'})">
+<a href="/api/metrics?hist=1" target="_blank">/api/metrics</a> · 日志 logs/metrics_YYYYMMDD.csv<br>
+<canvas id="mchart" width="640" height="160" style="border:1px solid #888;background:white;max-width:100%"></canvas><br>
+<small>红 = 估算总功耗 W（左轴 0–10 W），蓝 = CPU %（右轴），灰底 = 摄像头休眠。最近 1 小时（每 10 s 一点）。</small>
+<div id="mtab" style="font-size:12px"></div>
+</fieldset>
+
+<a name="notify"></a>
+<fieldset><legend><b>5. 手机通知（告警时发 Telegram / WhatsApp / ntfy / 邮件 / Discord）</b>　默认全部关闭；密钥只存在树莓派的 notify.json，页面不会显示已保存的密钥</legend>
+总开关 <select id="n_enabled"><option value="false">关</option><option value="true">开</option></select>
+&nbsp; 最短间隔 <input id="n_min_interval_s" size="4"> s &nbsp; 带图片 <select id="n_send_photo"><option value="true">是</option><option value="false">否</option></select>
+<table border="1" cellspacing="0" style="margin-top:4px">
+<tr><th>通道</th><th>启用</th><th>配置</th><th>测试</th></tr>
+<tr valign="top"><td><b>Telegram</b><br><small>文字+图片，免费</small></td>
+<td><select id="tg_enabled"><option value="false">关</option><option value="true">开</option></select></td>
+<td>bot_token <input id="tg_bot_token" type="password" size="28" autocomplete="off" placeholder=""> <span id="tg_bot_token_set"></span><br>
+chat_id <input id="tg_chat_id" size="16"> <input type="button" value="查找 chat_id" onclick="tgChats()"> <span id="tg_chats"></span><br>
+<small>1) Telegram 里找 @BotFather → /newbot → 得到 bot_token；2) 填进来点“保存通知设置”；3) 在 Telegram 给你的新机器人发一句 /start；4) 点“查找 chat_id”，把列出的数字填进来再保存。</small></td>
+<td><input type="button" value="发送测试" onclick="ntest('telegram')"><br><label><input type="checkbox" id="tg_photo"> 测试带当前画面（所有通道）</label></td></tr>
+<tr valign="top"><td><b>WhatsApp<br>CallMeBot</b><br><small>只发文字，免费，仅个人</small></td>
+<td><select id="cmb_enabled"><option value="false">关</option><option value="true">开</option></select></td>
+<td>手机号 <input id="cmb_phone" size="16" placeholder="+44…"> apikey <input id="cmb_apikey" type="password" size="12" autocomplete="off"> <span id="cmb_apikey_set"></span><br>
+<small>按 callmebot.com 上的步骤：把它页面上给出的机器人号码加为联系人，用 WhatsApp 发 “I allow callmebot to send me messages”，它回复的 APIKEY 填到这里。</small></td>
+<td><input type="button" value="发送测试" onclick="ntest('whatsapp_callmebot')"></td></tr>
+<tr valign="top"><td><b>WhatsApp<br>Cloud API</b><br><small>Meta 官方，需企业账号</small></td>
+<td><select id="wc_enabled"><option value="false">关</option><option value="true">开</option></select></td>
+<td>access_token <input id="wc_access_token" type="password" size="24" autocomplete="off"> <span id="wc_access_token_set"></span><br>
+phone_number_id <input id="wc_phone_number_id" size="16"> 收件人 <input id="wc_to" size="14" placeholder="+44…"><br>
+方式 <select id="wc_mode"><option value="template">模板（随时可发）</option><option value="text">文字/图片（仅 24 小时会话内）</option></select>
+模板名 <input id="wc_template" size="12"> 语言 <input id="wc_lang" size="5"> 模板带 {{1}} 参数 <select id="wc_template_param"><option value="true">是</option><option value="false">否</option></select>
+API 版本 <input id="wc_api_version" size="5"></td>
+<td><input type="button" value="发送测试" onclick="ntest('whatsapp_cloud')"></td></tr>
+<tr valign="top"><td><b>ntfy</b><br><small>文字+图片，免费</small></td>
+<td><select id="nt_enabled"><option value="false">关</option><option value="true">开</option></select></td>
+<td>服务器 <input id="nt_server" size="24" placeholder="https://ntfy.sh"> 主题 <input id="nt_topic" size="18" placeholder="etec306-随机长字符串"><br>
+访问令牌 <input id="nt_token" type="password" size="18" autocomplete="off"> <span id="nt_token_set"></span> 优先级 <select id="nt_priority"><option>default</option><option>high</option><option>urgent</option></select><br>
+<small>手机装 ntfy 应用并订阅同一个主题。ntfy.sh 上的主题是公开的：主题名要长且难猜；自建服务器可设访问令牌。</small></td>
+<td><input type="button" value="发送测试" onclick="ntest('ntfy')"></td></tr>
+<tr valign="top"><td><b>邮件 SMTP</b><br><small>文字+附件图片</small></td>
+<td><select id="em_enabled"><option value="false">关</option><option value="true">开</option></select></td>
+<td>SMTP 服务器 <input id="em_host" size="18"> 端口 <input id="em_port" size="4"> 加密 <select id="em_security"><option value="starttls">STARTTLS</option><option value="ssl">SSL</option><option value="none">无</option></select><br>
+用户名 <input id="em_user" size="22"> 密码 <input id="em_password" type="password" size="18" autocomplete="off"> <span id="em_password_set"></span><br>
+发件人 <input id="em_from_addr" size="22" placeholder="（空 = 用户名）"> 收件人 <input id="em_to" size="22"><br>
+<small>Gmail：开两步验证 → 生成“应用专用密码”（16 位），服务器 smtp.gmail.com 端口 587 STARTTLS。</small></td>
+<td><input type="button" value="发送测试" onclick="ntest('email')"></td></tr>
+<tr valign="top"><td><b>Discord</b><br><small>文字+图片，免费</small></td>
+<td><select id="dc_enabled"><option value="false">关</option><option value="true">开</option></select></td>
+<td>webhook_url <input id="dc_webhook_url" type="password" size="40" autocomplete="off"> <span id="dc_webhook_url_set"></span><br>
+<small>Discord 频道 → 编辑频道 → 整合 → Webhook → 新 Webhook → 复制 URL。</small></td>
+<td><input type="button" value="发送测试" onclick="ntest('discord')"></td></tr>
+</table>
+<input type="button" value="保存通知设置" onclick="nsave()"> <input type="button" value="清除所有已保存的密钥" onclick="nclear()"> <span id="nres"></span><br>
+<small id="nlast"></small>
+</fieldset>
+
+<a name="sys"></a>
+<fieldset><legend><b>6. 视觉 / 物体 / 系统</b></legend>
+<table border="1" cellspacing="0" id="sys"></table>
+</fieldset>
+<p><small>页面每 0.4 s 刷新。</small></p>
+
+<script>
+var spec = [];
+function calib(o) { post("/api/calib", o).then(function (j) { if (!j.ok) alert(j.error); }); }
+function cmd(a) { post("/api/cmd", {action: a}).then(function (j) { $("cmdres").innerHTML = j.ok ? (typeof j.result === "string" ? esc(j.result) : "OK") : ("错误：" + esc(j.error)); }); }
+function servo(ch, t) { post("/api/servo", {action: "nudge", ch: ch, ticks: t}).then(showMan); }
+function servoC(ch) { post("/api/servo", {action: "center", ch: ch}).then(showMan); }
+function servoExit() { post("/api/servo", {action: "exit"}).then(function () { cmd("resume"); }); }
+function showMan(j) { $("man").innerHTML = j.ok ? JSON.stringify(j.manual) : ("错误：" + j.error); }
+function loadSettings() {
+  fetch("/api/settings").then(function (r) { return r.json(); }).then(function (j) {
+    spec = j.spec; var h = "";
+    spec.forEach(function (s) {
+      var v = j.settings[s.key], inp;
+      if (s.group) h += '<tr><td colspan="4" class="grp">' + s.group + '</td></tr>';
+      if (s.type === "bool") inp = '<select data-key="' + s.key + '" data-orig="' + v + '"><option value="true"' + (v ? " selected" : "") + '>开</option><option value="false"' + (!v ? " selected" : "") + '>关</option></select>';
+      else if (s.key.indexOf("_sign") > 0) inp = '<select data-key="' + s.key + '" data-orig="' + v + '"><option value="1"' + (v == 1 ? " selected" : "") + '>+1</option><option value="-1"' + (v == -1 ? " selected" : "") + '>-1</option></select>';
+      else inp = '<input type="text" size="6" data-key="' + s.key + '" data-orig="' + v + '" value="' + v + '">';
+      h += "<tr><td>" + s.label + "</td><td>" + inp + "</td><td><small>" + s.key + "</small></td><td><small>默认 " + s.default + "，" + s.min + "~" + s.max + "</small></td></tr>";
+    });
+    $("settings").innerHTML = h;
+  });
+}
+function saveSettings() {
+  var ch = {}, els = document.querySelectorAll("#settings [data-key]");
+  for (var i = 0; i < els.length; i++) { var e = els[i]; if (e.value !== String(e.dataset.orig)) ch[e.dataset.key] = e.value === "true" ? true : e.value === "false" ? false : e.value; }
+  if (!Object.keys(ch).length) { $("setres").innerHTML = "没有修改"; return; }
+  post("/api/settings", ch).then(function (j) { $("setres").innerHTML = j.ok ? ("已保存：" + Object.keys(ch).join(", ")) : ("错误：" + j.error); loadSettings(); });
+}
+function resetSettings() { if (confirm("全部恢复默认？（标定结果也会丢）")) post("/api/settings/reset").then(function () { loadSettings(); $("setres").innerHTML = "已恢复默认"; }); }
+function row(a) { return "<tr>" + a.map(function (c) { return "<td>" + c + "</td>"; }).join("") + "</tr>"; }
+function render(s) {
+  $("clock").innerHTML = s.time + " " + s.state_cn + " / " + s.guide.mode_cn + (s.needs_calib ? " <font color=red><b>雷达与云台方向不一致（误差 " + s.assoc_err + "°），请重新标定</b></font>" : "");
+  drawOverlay($("ov"), s, {calib: true});
+  var c = s.calib;
+  $("cmode").innerHTML = {off: "未标定", selftest: "方向自检中…", points: "取点中（云台固定）"}[c.mode] + "，已记录 " + c.samples.length + " 点";
+  $("cmsg").innerHTML = esc(c.msg || "");
+  var cd = c.cand;
+  $("ccand").innerHTML = cd ? (cd.kind + " 实际 pan " + cd.pan_true + "° tilt " + cd.tilt_true + "° ← " + (cd.track ? ("雷达 T" + cd.track.id + " θ原始 " + cd.track.az_raw + "° r " + cd.track.r + " m（当前映射算出 " + cd.track.pred_pan + "°）") : "<font color=red>没有雷达目标</font>")) : "-";
+  $("csamples").innerHTML = c.samples.length ? ("<tr><th>#</th><th>类型</th><th>雷达θ原始</th><th>r m</th><th>实际pan</th><th>实际tilt</th></tr>" + c.samples.map(function (p, i) { return row([i + 1, p.kind, p.track.az_raw, p.track.r, p.pan_true, p.tilt_true]); }).join("")) : "";
+  var g = s.guide;
+  $("guide").innerHTML = row(["模式", g.mode_cn, "写入", g.writes]) + row(["目标角", f1(g.desired_pan) + " / " + f1(g.desired_tilt), "指令角", f1(g.pan_cmd) + " / " + f1(g.tilt_cmd)]) +
+    row(["CH4", g.pan_us + " µs", "CH8", g.tilt_us + " µs"]) + row(["视觉跟踪", s.vt.active ? (s.vt.kind + " 雷达T" + (s.vt.track_id || "-")) : "否", "巡逻", s.patrol.active ? ("第 " + s.patrol.idx + " 位") : "否"]) +
+    row(["主目标", s.primary ? ("T" + s.primary.id + " " + s.primary.kind + " r " + s.primary.r_m.toFixed(2)) : "-", "时延", s.latency_ms.median === null ? "-" : (s.latency_ms.median + "/" + s.latency_ms.max + " ms")]) +
+    row(["身份", esc(JSON.stringify(s.identity)), "错误", esc(g.error || "-")]);
+  $("tgt").innerHTML = s.radar.targets.map(function (t) { return row([t.slot, t.xr_mm, t.y_mm, t.speed_cms, t.dist_mm, f1(t.az_deg), t.valid ? "是" : "否"]); }).join("") || '<tr><td colspan="7">无</td></tr>';
+  $("trk").innerHTML = s.tracks.map(function (t) { return row([(s.primary && s.primary.id === t.id ? "<b>T" + t.id + "</b>" : "T" + t.id), t.xr_mm, t.y_mm, t.r_m.toFixed(2), t.vx_mms, t.vy_mms, t.kind + (t.obj ? "(" + t.obj + ")" : ""), t.hits, t.confirmed ? "是" : "否", t.age_s]); }).join("") || '<tr><td colspan="10">无</td></tr>';
+  $("raw").innerHTML = (s.radar.open ? "" : "串口未打开 " + esc(s.radar.error) + " | ") + "雷达 " + s.radar.fps + " Hz，帧 " + s.radar.frames + " | " + s.radar.raw;
+  drawPlot($("plot"), s, Number($("zoom").value));
+  var v = s.vision, o = s.objects, m = s.mqtt, h = s.hw;
+  $("sys").innerHTML = row(["人脸检测", v.available ? (v.active ? (v.rate + " Hz，" + (v.ms || "-") + " ms/帧") : "待机") : "不可用", "物体识别", o.available ? (o.rate + " Hz，" + (o.ms || "-") + " ms + 手 " + (o.hand_ms || "-") + " ms") : "不可用"]) +
+    row(["看到的物体", o.items.map(function (x) { return x.cn + x.score; }).join(" ") || "-", "摄像头", s.camera.fps + " fps " + (s.camera.ok ? "" : esc(s.camera.error))]) +
+    row(["MQTT", m.enabled ? ((m.connected ? "在线 " : "离线 ") + m.host + " 心跳 " + m.last_heartbeat + " 已发 " + m.sent) : "未配置", "CPU", s.sys.cpu_temp_c + "°C 负载 " + s.sys.load.join(" ")]) +
+    row(["I2C", h.i2c.join(" ") + " PCA9685 " + (h.pca9685 ? "OK" : "无") + " OLED " + (h.oled ? "OK" : "无"), "HTTPS", s.https_port ? ("https://" + s.ip + ":" + s.https_port + "/（自签证书）") : "未启用"]) +
+    row(["硬件错误", esc(JSON.stringify(h.errors)), "运行", Math.floor(s.uptime_s / 60) + " 分钟"]);
+  $("man").innerHTML = s.manual ? JSON.stringify(s.manual) : "未进入";
+}
+function poll() {
+  fetch("/api/state").then(function (r) { return r.json(); }).then(render).catch(function () {}).then(function () { setTimeout(poll, 400); });
+}
+$("cam").onerror = function () { setTimeout(function () { $("cam").src = "/api/stream.mjpg?" + Date.now(); }, 3000); };
+var NMAP = {tg: "telegram", cmb: "whatsapp_callmebot", wc: "whatsapp_cloud", nt: "ntfy", em: "email", dc: "discord"};
+function nfill(n) {
+  ["enabled", "min_interval_s", "send_photo"].forEach(function (k) { $("n_" + k).value = String(n[k]); });
+  Object.keys(NMAP).forEach(function (p) {
+    var c = n[NMAP[p]];
+    Object.keys(c).forEach(function (k) {
+      var e = $(p + "_" + k);
+      if (e) e.value = (e.type === "password") ? "" : String(c[k]);
+      var st = $(p + "_" + k + "_set");
+      if (st && k.slice(-4) !== "_set") st.innerHTML = c[k + "_set"] ? "<font color=green>已保存（留空 = 不改）</font>" : "<font color=gray>未设置</font>";
+    });
+  });
+  var L = n.last || {};
+  $("nlast").innerHTML = "缺少：" + Object.keys(NMAP).map(function (p) { var c = n[NMAP[p]]; return NMAP[p] + " [" + (c.missing.join(", ") || "无") + "]"; }).join("；") +
+    (Object.keys(L).length ? "<br>最近结果：" + Object.keys(L).map(function (k) { return k + " " + L[k].t + " " + (L[k].ok ? "成功" : "失败") + " " + esc(L[k].msg); }).join("；") : "");
+}
+function mload() {
+  fetch("/api/metrics?hist=1").then(function (r) { return r.json(); }).then(function (j) {
+    var h = j.history || [], c = $("mchart"), g = c.getContext("2d"), W = c.width, H = c.height, n = Math.max(h.length, 2);
+    g.clearRect(0, 0, W, H); g.font = "10px sans-serif";
+    h.forEach(function (p, i) { if (p.cam === "sleeping") { g.fillStyle = "#ddd"; g.fillRect(i * W / n, 0, W / n + 1, H); } });
+    function line(key, max, col) { g.strokeStyle = col; g.beginPath(); h.forEach(function (p, i) { var y = H - 12 - (H - 20) * Math.min(1, p[key] / max); if (i) g.lineTo(i * W / (n - 1), y); else g.moveTo(0, y); }); g.stroke(); }
+    line("w", 10, "red"); line("cpu", 100, "blue");
+    g.fillStyle = "black"; g.fillText("10 W", 2, 10); g.fillText("100%", W - 28, 10); g.fillText(h.length ? h[0].t : "", 2, H - 2); g.fillText(h.length ? h[h.length - 1].t : "", W - 50, H - 2);
+    var m = j.metrics || {}, p = m.power_est || {}, md = j.model || {};
+    $("mtab").innerHTML = m.time ? "<table border=1 cellspacing=0><tr><th>树莓派</th><th>摄像头</th><th>雷达</th><th>OLED/LED</th><th>逻辑合计</th><th>舵机</th><th>总计</th></tr><tr><td>" +
+      [p.pi_w, p.camera_w, p.radar_w, p.hmi_w, p.logic_w, p.servo_w, p.total_w].join("</td><td>") + "</td></tr></table>系数: " +
+      Object.keys(md).map(function (k) { return k + "=" + md[k]; }).join(", ") + "<br>唤醒记录: " + esc(JSON.stringify(m.detect_wake || [])) : "-";
+  });
+}
+mload(); setInterval(mload, 10000);
+function nload() { fetch("/api/notify").then(function (r) { return r.json(); }).then(function (j) { nfill(j.notify); }); }
+function ncollect() {
+  var o = {enabled: $("n_enabled").value === "true", send_photo: $("n_send_photo").value === "true", min_interval_s: $("n_min_interval_s").value};
+  Object.keys(NMAP).forEach(function (p) {
+    var c = {}, els = document.querySelectorAll("[id^=" + p + "_]");
+    for (var i = 0; i < els.length; i++) {
+      var e = els[i], k = e.id.slice(p.length + 1);
+      if (e.tagName === "SPAN" || e.type === "checkbox" || e.type === "button") continue;
+      c[k] = e.value === "true" ? true : e.value === "false" ? false : e.value;
+    }
+    o[NMAP[p]] = c;
+  });
+  return o;
+}
+function nsave() { post("/api/notify", ncollect()).then(function (j) { $("nres").innerHTML = j.ok ? "已保存" : ("错误：" + esc(j.error)); if (j.ok) nfill(j.notify); }); }
+function nclear() {
+  if (!confirm("清除所有已保存的密钥？")) return;
+  post("/api/notify", {clear: ["telegram.bot_token", "whatsapp_callmebot.apikey", "whatsapp_cloud.access_token", "ntfy.token", "email.password", "discord.webhook_url"]}).then(function (j) { $("nres").innerHTML = j.ok ? "已清除" : esc(j.error); if (j.ok) nfill(j.notify); });
+}
+function ntest(ch) {
+  $("nres").innerHTML = "发送中…（先保存设置）";
+  post("/api/notify", ncollect()).then(function () { return post("/api/notify/test", {channel: ch, photo: $("tg_photo").checked}); }).then(function (j) { $("nres").innerHTML = (j.ok ? "成功：" : "失败：") + esc(j.msg || j.error); nload(); });
+}
+function tgChats() {
+  $("tg_chats").innerHTML = "查询中…";
+  post("/api/notify/telegram_chats", {}).then(function (j) {
+    $("tg_chats").innerHTML = j.ok ? j.chats.map(function (c) { return '<a href="#" onclick="$(\'tg_chat_id\').value=\'' + c.chat_id + '\';return false">' + c.chat_id + "</a> " + esc(c.type + " " + c.name); }).join("；") + "（点数字填入）" : ("<font color=red>" + esc(j.error) + "</font>");
+  });
+}
+loadSettings(); nload(); poll();
+</script>
+</body>
+</html>

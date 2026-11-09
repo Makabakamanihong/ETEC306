@@ -1,0 +1,9 @@
+[Unit]
+Description=ETEC306 Wi-Fi setup mode (hotspot + captive portal, auto-revert)
+After=NetworkManager.service
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/etec306-wifi
+ExecStart=/usr/bin/python3 /home/<user>/etec306/app/tools/wifi_setup.py
+TimeoutStopSec=60

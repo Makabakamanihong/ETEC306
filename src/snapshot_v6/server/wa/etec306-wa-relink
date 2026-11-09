@@ -1,0 +1,11 @@
+#!/bin/bash
+# New pairing: forget the old link, restart, wait for a fresh QR, copy it to /home/opc/etec306/wa_qr.png
+set -e
+sudo systemctl stop etec306-wa
+[ "$1" = "--keep" ] || sudo rm -rf /opt/etec306-wa/state/auth
+sudo rm -f /opt/etec306-wa/state/qr.png
+sudo systemctl start etec306-wa
+for i in $(seq 1 30); do sudo test -f /opt/etec306-wa/state/qr.png && break; sleep 1; done
+sudo cp /opt/etec306-wa/state/qr.png /home/opc/etec306/wa_qr.png && sudo chown opc /home/opc/etec306/wa_qr.png
+echo "QR: /home/opc/etec306/wa_qr.png (valid ~20-60 s; the service keeps making new ones in state/qr.png)"
+sudo cat /opt/etec306-wa/state/status.json

@@ -1,0 +1,17 @@
+# Secrets and runtime data – never commit
+mqtt.json
+notify.json
+settings.json
+*.pem
+*.key
+*.crt
+tls/
+credentials/
+faces/
+models/
+logs/
+snapshots/
+events.jsonl*
+wa_qr.png
+state/
+__pycache__/

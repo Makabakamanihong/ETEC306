@@ -1,0 +1,6 @@
+{
+  "enabled": false,
+  "type": "ntfy",
+  "url": "https://ntfy.sh/<your-private-topic>",
+  "_telegram_example": {"type": "telegram", "token": "<bot token>", "chat_id": "<chat id>"}
+}

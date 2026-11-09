@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<title>ETEC306 人脸录入</title>
+<style>
+body { font-family: "SimSun", serif; font-size: 15px; margin: 6px; background: #eee; }
+td, th { font-size: 14px; padding: 3px 6px; }
+video { background: black; max-width: 100%; }
+</style>
+<script src="/i18n.js"></script>
+<script src="/common.js"></script>
+</head>
+<body>
+<b>ETEC306 人脸录入（白名单）</b> &nbsp; <input type="button" value="返回监控" onclick="location.href='/'">
+<hr>
+姓名：<input type="text" id="name" size="12"> &nbsp; 张数：<input type="text" id="n" size="2" value="9"> （1/3 正面，1/3 向左转，1/3 向右转）
+<p id="sec" style="color:red"></p>
+
+<fieldset><legend><b>方法 A：用这台手机/电脑的摄像头</b></legend>
+<input type="button" value="打开摄像头" onclick="openCam()">
+<select id="facing"><option value="user">前置</option><option value="environment">后置</option></select>
+<input type="button" value="开始录入" onclick="startUp()"> <input type="button" value="停止" onclick="stopUp()"><br>
+<video id="vid" autoplay playsinline muted width="480"></video><br>
+请离手机 40-80 cm，光线要亮，<b>按下面的大字提示转头</b>（先正面，再向自己左边、右边各转 20-30°，眼睛还能看到镜头）。<br>
+<div id="prompt" style="font-size:22px;font-weight:bold;color:#a00">-</div>
+进度：<b id="prog">-</b><br><span id="log" style="font-size:13px"></span>
+</fieldset>
+
+<fieldset><legend><b>方法 B：用监控摄像头（云台上的）</b></legend>
+站在云台摄像头前 1-2 m，先正对镜头，然后点（之后按进度里的提示向左、向右转头）：<input type="button" value="用监控摄像头录入" onclick="camEnroll()"><br>
+进度：<b id="prog2">-</b><br><span id="log2" style="font-size:13px"></span>
+</fieldset>
+
+<fieldset><legend><b>已录入的人</b>（同一个名字再录一次 = 追加样本；两种摄像头都录一遍效果最好）</legend>
+<table border="1" cellspacing="0" id="gal"></table>
+</fieldset>
+
+<canvas id="cv" style="display:none"></canvas>
+<script>
+var stream = null, timer = null, sid = null, busy = false, lastGal = "";
+if (!window.isSecureContext) {
+  $("sec").innerHTML = "手机浏览器只允许在 HTTPS 下打开摄像头。请改用 <a href='https://" + location.hostname + ":8443/enroll.html'>https://" + location.hostname + ":8443/enroll.html</a>（第一次会提示证书不安全，选“继续访问/高级→继续”）。方法 B 不受影响。";
+}
+function name() { var v = $("name").value.trim(); if (!v) { alert("请先输入姓名"); return null; } return v; }
+function openCam() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { alert("这个页面不能用摄像头（需要 HTTPS）"); return; }
+  if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+  navigator.mediaDevices.getUserMedia({video: {facingMode: $("facing").value, width: {ideal: 1280}, height: {ideal: 720}}, audio: false})
+    .then(function (s) { stream = s; $("vid").srcObject = s; })
+    .catch(function (e) { alert("打不开摄像头：" + e); });
+}
+function startUp() {
+  var nm = name(); if (!nm) return;
+  if (!stream) { alert("先点“打开摄像头”"); return; }
+  sid = "s" + Date.now() + Math.random().toString(36).slice(2, 8);
+  $("log").innerHTML = ""; $("prog").innerHTML = "开始…";
+  timer = setInterval(function () { shoot(nm); }, 700);
+}
+function stopUp() { if (timer) clearInterval(timer); timer = null; if (sid) post("/api/enroll/cancel", {sid: sid}); }
+function shoot(nm) {
+  if (busy) return;
+  var v = $("vid"), c = $("cv");
+  if (!v.videoWidth) return;
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext("2d").drawImage(v, 0, 0);
+  busy = true;
+  c.toBlob(function (b) {
+    fetch("/api/enroll/upload?sid=" + sid + "&name=" + encodeURIComponent(nm) + "&n=" + $("n").value, {method: "POST", headers: {"Content-Type": "image/jpeg"}, body: b})
+      .then(function (r) { return r.json(); }).then(function (j) {
+        busy = false;
+        if (!j.ok) { stopUp(); alert(j.error); return; }
+        var i = j.info || {};
+        var ps = j.poses || {}, q = j.quota || {};
+        $("prog").innerHTML = j.got + " / " + j.need + " （正面 " + (ps.front || 0) + "/" + (q.front || "-") + "，向左 " + (ps.right || 0) + "/" + (q.right || "-") + "，向右 " + (ps.left || 0) + "/" + (q.left || "-") + "）";
+        $("prompt").innerHTML = esc(j.prompt || "-");
+        $("log").innerHTML = (i.error ? ("没用：" + esc(i.error)) : ("OK " + ({front: "正面", right: "向左", left: "向右"}[i.pose] || "") + " 转头 " + i.yaw + "° 置信 " + i.score + " 眼距 " + i.eye_px + " px")) + " (" + (i.size || "") + ")<br>" + $("log").innerHTML.split("<br>").slice(0, 5).join("<br>");
+        if (j.done) {
+          clearInterval(timer); timer = null;
+          post("/api/enroll/finish", {sid: sid}).then(function (k) { $("prog").innerHTML = k.ok ? ("完成：" + esc(k.msg)) : ("失败：" + esc(k.error)); lastGal = ""; });
+        }
+      }).catch(function (e) { busy = false; });
+  }, "image/jpeg", 0.9);
+}
+function camEnroll() {
+  var nm = name(); if (!nm) return;
+  post("/api/enroll", {name: nm, samples: parseInt($("n").value || "5")}).then(function (j) { if (!j.ok) alert(j.error); });
+}
+function delFace(n) { if (confirm("删除 " + n + "？")) post("/api/faces/delete", {name: n}).then(function () { lastGal = ""; }); }
+function poll() {
+  fetch("/api/state?lite").then(function (r) { return r.json(); }).then(function (s) {
+    $("prog2").innerHTML = (s.enroll.running ? "[进行中] " : "") + esc(s.enroll.msg || "-");
+    $("log2").innerHTML = (s.enroll.log || []).slice(-6).map(esc).join("<br>");
+    var gs = JSON.stringify(s.gallery);
+    if (gs !== lastGal) {
+      lastGal = gs;
+      $("gal").innerHTML = "<tr><th>姓名</th><th>样本 (正/左/右)</th><th>时间</th><th>照片</th><th></th></tr>" + (s.gallery.map(function (p) {
+        return "<tr><td>" + esc(p.name) + "</td><td>" + p.samples + (p.poses ? " (" + p.poses.front + "/" + p.poses.right + "/" + p.poses.left + ")" : "") + "</td><td>" + p.time + "</td><td>" + p.crops.slice(-8).map(function (c) { return '<img src="/faces/' + encodeURIComponent(c) + '" width="44">'; }).join(" ") +
+          '</td><td><input type="button" value="删除" onclick="delFace(\'' + esc(p.name).replace(/'/g, "") + '\')"></td></tr>';
+      }).join("") || '<tr><td colspan="5">还没有人</td></tr>');
+    }
+  }).catch(function () {}).then(function () { setTimeout(poll, 1000); });
+}
+poll();
+</script>
+</body>
+</html>

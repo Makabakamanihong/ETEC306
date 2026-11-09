@@ -8,6 +8,17 @@
 | Student | Tang Li (`Makabakamanihong`) |
 | Repository | Capstone project record: version control, collaboration, and documentation |
 
+## ETEC326 Milestone 1 – Detailed Design
+
+**Preliminary (untested) detailed design**, November 9, 2026 – Tang Li (solo project).
+
+- Design (Markdown with figures): [docs/etec326-milestone1/README.md](docs/etec326-milestone1/README.md)
+- PDF / DOCX: [docs/etec326-milestone1/](docs/etec326-milestone1/)
+- Figures: [docs/etec326-milestone1/figures/](docs/etec326-milestone1/figures/)
+- Scrubbed source snapshot of software v6: [src/snapshot_v6/](src/snapshot_v6/)
+
+Link submitted for the milestone: https://github.com/Makabakamanihong/ETEC306/tree/main/docs/etec326-milestone1
+
 ## Overview
 
 This repository tracks a headless Raspberry Pi edge node that uses millimeter-wave radar for spatial cueing, a servo pan/tilt camera for visual confirmation, and MQTT for cloud alerts. Everyday sensing stays on the edge; the cloud receives telemetry and intrusion events only when needed.
@@ -26,7 +37,8 @@ This repository tracks a headless Raspberry Pi edge node that uses millimeter-wa
 docs/technical-design.md   Full hardware/software technical draft
 docs/project-plan.md       Phased checklist for the capstone
 docs/collaboration.md      Git / Issues / Project board workflow
-src/                       Edge software placeholders (radar, servo, vision, MQTT)
+docs/etec326-milestone1/   ETEC326 Milestone 1 detailed design (Markdown, PDF, DOCX, figures)
+src/                       Edge software notes; src/snapshot_v6/ = scrubbed v6 source
 .github/workflows/         Lightweight CI checks
 ```
 

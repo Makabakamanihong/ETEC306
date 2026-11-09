@@ -1,0 +1,20 @@
+[Unit]
+Description=ETEC306 radar pan-tilt camera app (formal program)
+After=network-online.target
+Wants=network-online.target
+Conflicts=etec306-bench.service
+
+[Service]
+Type=simple
+User=<user>
+SupplementaryGroups=gpio i2c video dialout
+WorkingDirectory=/home/<user>/etec306/app
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /home/<user>/etec306/app/app.py
+Restart=always
+RestartSec=2
+KillSignal=SIGTERM
+TimeoutStopSec=8
+
+[Install]
+WantedBy=multi-user.target

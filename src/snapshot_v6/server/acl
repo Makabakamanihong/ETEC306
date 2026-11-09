@@ -1,0 +1,14 @@
+# ETEC306 ACL: device may only publish its own data and read commands
+user etec306-pi
+topic write home/etec306/status
+topic write home/etec306/track
+topic write home/etec306/event
+topic write home/etec306/image/#
+topic read home/etec306/cmd
+
+user etec306-cloud
+topic read home/#
+topic write home/etec306/cmd
+
+user etec306-admin
+topic readwrite home/#

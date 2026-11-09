@@ -1,0 +1,20 @@
+[Unit]
+Description=ETEC306 alarm -> WhatsApp forwarder (Baileys linked device)
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+User=etecwa
+Group=etecwa
+WorkingDirectory=/opt/etec306-wa
+ExecStart=/usr/bin/node /opt/etec306-wa/bot.js
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/etec306-wa/state
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
